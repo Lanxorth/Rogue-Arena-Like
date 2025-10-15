@@ -11,7 +11,9 @@ class Save
     static public int MonsterHp = 0;
     static public int MonsterAttack = 0;
     static public int score = 0;
-    static public Dictionary<string, object> Inventory = new Dictionary<string, object>();
+    static public Dictionary<Item, int> Inventory = new Dictionary<Item, int>();
+    static Item StartSword = Item.FindByName("Epée en fer");
+    static Item Potion = Item.FindByName("Potion");
 
     static string pathToSave = @"C:\Users\bndiaye\source\repos\Rogue-Arena-Like\Rogue-Arena-Like\Save\Save.JSON";
     static public void AfficherScore()
@@ -22,8 +24,19 @@ class Save
     static public void ReinitialiserScore()
     {
         score = 0;
+        room = 0.0;
+        level = 1;
+        PlayerHp = 0;
+        MonsterHp = 0;
+        MonsterAttack = 0;
+        Inventory = new Dictionary<Item, int>()
+        {
+            {StartSword, 1 },
+            {Potion, 3},
+        };
+
         SauvegarderScore();
-        Console.WriteLine("Score réinitialisé !");
+        Console.WriteLine("Save réinitialisé !");
     }
 
     static public void SauvegarderScore()
@@ -59,8 +72,6 @@ class Save
         catch (Exception ex)
         {
             Console.WriteLine($"Erreur lors du chargement du score : {ex.Message}");
-            Console.WriteLine($"Creation d'un nouveau fichier de sauvegard");
-            FileStream fs = File.Create(pathToSave);
         }
     }
 }

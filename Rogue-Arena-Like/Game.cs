@@ -2,6 +2,15 @@ class Game
 {
     public static void StartGame()
     {
-        Dictionary<string, object> Inventory = new Dictionary<string, object>();
+        
     }
+}
+
+class Item
+{
+    public string Name { get; set; }
+    public string Description { get; set; }
+
+    public int State { get; set; }
+    public int Quantity { get; set; }
 }
