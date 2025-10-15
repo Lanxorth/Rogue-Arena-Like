@@ -5,7 +5,7 @@ using System.Text;
 
 class Save
 {
-    static public double room = 0.0;
+    static public int room = 0;
     static public int level = 0;
     static public int PlayerHp = 0;
     static public int MonsterHp = 0;
@@ -26,9 +26,9 @@ class Save
     static public void ResetSave()
     {
         score = 0;
-        room = 0.0;
+        room = 0;
         level = 1;
-        PlayerHp = 0;
+        PlayerHp = 100;
         MonsterHp = 0;
         MonsterAttack = 0;
         Inventory = new Dictionary<Item, int>()
@@ -38,7 +38,7 @@ class Save
         };
 
         SaveGame();
-        Console.WriteLine("Save réinitialisé !");
+        Console.WriteLine("Sauvegarde réinitialisé !");
     }
 
     static public void SaveGame()
