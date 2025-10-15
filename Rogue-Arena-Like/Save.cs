@@ -11,17 +11,19 @@ class Save
     static public int MonsterHp = 0;
     static public int MonsterAttack = 0;
     static public int score = 0;
+    static public int bestscore = 0;
     static public Dictionary<Item, int> Inventory = new Dictionary<Item, int>();
     static Item StartSword = Item.FindByName("Epée en fer");
     static Item Potion = Item.FindByName("Potion");
+    static public string profile;
 
-    static string pathToSave = @"C:\Users\bndiaye\source\repos\Rogue-Arena-Like\Rogue-Arena-Like\Save\Save.JSON";
-    static public void AfficherScore()
+    static string pathToSave;
+    static public void ShowSaveState()
     {
         Console.WriteLine($"Votre score actuel est : {score} point(s).");
     }
 
-    static public void ReinitialiserScore()
+    static public void ResetSave()
     {
         score = 0;
         room = 0.0;
@@ -35,14 +37,15 @@ class Save
             {Potion, 3},
         };
 
-        SauvegarderScore();
+        SaveGame();
         Console.WriteLine("Save réinitialisé !");
     }
 
-    static public void SauvegarderScore()
+    static public void SaveGame()
     {
         try
         {
+            pathToSave = @"C:\Users\bndiaye\source\repos\Rogue-Arena-Like\Rogue-Arena-Like\Save\Save" + profile + ".JSON";
             File.WriteAllText(pathToSave, score.ToString());
         }
         catch (Exception ex)
@@ -51,7 +54,7 @@ class Save
         }
     }
 
-    static public void ChargerScore()
+    static public void LoadSave()
     {
         try
         {
