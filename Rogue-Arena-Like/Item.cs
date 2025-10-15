@@ -17,7 +17,7 @@ public class Item
         new Item { Name = "Super-Potion", Description = "Une améliorer potion , soigne le joueur de 100 PV", State = 100},
     };
 
-    public static Item TrouverParNom(string name)
+    public static Item FindByName(string name)
     {
         return Items.FirstOrDefault(i => i.Name == name);
     }

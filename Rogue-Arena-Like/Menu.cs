@@ -59,7 +59,7 @@ class Menu
                     break;
 
                 case "2":
-                    // Lancer la Calculatrice
+                    Save.AfficherScore();
 
                     break;
 
