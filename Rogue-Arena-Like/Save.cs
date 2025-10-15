@@ -15,9 +15,9 @@ class Save
     static public Dictionary<Item, int> Inventory = new Dictionary<Item, int>();
     static Item StartSword = Item.FindByName("Epée en fer");
     static Item Potion = Item.FindByName("Potion");
-    static public string profile;
+    static public string profile = "null";
 
-    static string pathToSave;
+    static string pathToSave = "null";
     static public void ShowSaveState()
     {
         Console.WriteLine($"Votre score actuel est : {score} point(s).");
