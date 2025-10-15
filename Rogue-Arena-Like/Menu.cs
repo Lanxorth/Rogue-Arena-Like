@@ -44,8 +44,9 @@ class Menu
         {
             Console.WriteLine("Select a option :");
             Console.WriteLine("1 - Start Game");
-            Console.WriteLine("2 - Check Score");
-            Console.WriteLine("3 - Close Game");
+            Console.WriteLine("2 - Check Save");
+            Console.WriteLine("3 - Reset Save");
+            Console.WriteLine("4 - Close Game");
 
             Console.Write("Votre choix : ");
             string choix = Console.ReadLine();
@@ -53,7 +54,7 @@ class Menu
             switch (choix)
             {
                 case "1":
-                    // Lancer le Bloc-notes
+                    Game.StartGame();
 
                     break;
 
@@ -63,6 +64,9 @@ class Menu
                     break;
 
                 case "3":
+                    
+
+                case "4":
                     Environment.Exit(0);
                     break;
 
@@ -70,9 +74,6 @@ class Menu
                     Console.WriteLine("Choix invalide.");
                     return;
             }
-
         }
-        
-
     }
 }
