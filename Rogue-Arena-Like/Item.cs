@@ -21,4 +21,9 @@ public class Item
     {
         return Items.FirstOrDefault(i => i.Name == name);
     }
+
+    public override string ToString()
+    {
+        return Name; // Affiche le nom de l'objet
+    }
 }

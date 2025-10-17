@@ -1,9 +1,10 @@
-using System;
-using System.Collections.Generic;
-using System.Security.Cryptography;
-using System.Text;
 using MongoDB.Bson;
 using MongoDB.Driver;
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Security.Cryptography;
+using System.Text.Json;
 
 class Save
 {
@@ -14,18 +15,19 @@ class Save
     public static int MonsterHp = 0;
     public static int MonsterAttack = 0;
     public static int score = 0;
-    public static int bestscore = 0;
-    public static Dictionary<Item, int> Inventory = new Dictionary<Item, int>(); 
-    static Item StartSword = Item.FindByName("Epée en fer"); 
+    public static Dictionary<Item, int> Inventory = new Dictionary<Item, int>();
+    static Item StartSword = Item.FindByName("Epée en fer");
     static Item Potion = Item.FindByName("Potion");
 
-    // ==== Profil courant ====
+    // ==== Profil ====
     public static string CurrentProfile = null;
+    public static int BestScore = 0;
 
     // ==== MongoDB ====
     private static IMongoCollection<BsonDocument> collection;
 
-    public static void InitializeMongo(string connectionString)
+    // ==== Initialise MongoDB ====
+    public static void InitializeMongo(string connectionString = "mongodb://localhost:27017")
     {
         var client = new MongoClient(connectionString);
         var db = client.GetDatabase("GameDB");
@@ -44,24 +46,12 @@ class Save
         byte[] salt = RandomNumberGenerator.GetBytes(16);
         byte[] hash = HashPassword(password, salt);
 
-        var saveData = new BsonDocument
-        {
-            { "room", 0 },
-            { "level", 1 },
-            { "PlayerHp", 100 },
-            { "MonsterHp", 0 },
-            { "MonsterAttack", 0 },
-            { "score", 0 },
-            { "bestscore", 0 },
-            { "Inventory", new BsonDocument { { StartSword, 1 }, { Potion, 3 } } }
-        };
-
         var doc = new BsonDocument
         {
             { "_id", profileName },
             { "PasswordHash", Convert.ToBase64String(hash) },
             { "Salt", Convert.ToBase64String(salt) },
-            { "SaveData", saveData }
+            { "BestScore", 0 }
         };
 
         collection.InsertOne(doc);
@@ -79,10 +69,10 @@ class Save
             return false;
         }
 
-        byte[] salt = Convert.FromBase64String(doc["Salt"].AsString);
         byte[] storedHash = Convert.FromBase64String(doc["PasswordHash"].AsString);
-
+        byte[] salt = Convert.FromBase64String(doc["Salt"].AsString);
         byte[] hash = HashPassword(password, salt);
+
         if (!CryptographicOperations.FixedTimeEquals(hash, storedHash))
         {
             Console.WriteLine("Mot de passe incorrect !");
@@ -90,77 +80,100 @@ class Save
         }
 
         CurrentProfile = profileName;
+        BestScore = doc["BestScore"].ToInt32();
+
         LoadGame();
         Console.WriteLine($"Connecté au profil '{profileName}' !");
         return true;
     }
 
+    // ==== Hash du mot de passe ====
     private static byte[] HashPassword(string password, byte[] salt, int iterations = 100_000, int length = 32)
     {
         using var pbkdf2 = new Rfc2898DeriveBytes(password, salt, iterations, HashAlgorithmName.SHA512);
         return pbkdf2.GetBytes(length);
     }
 
-    // ==== Sauvegarde ====
+    // ==== Sauvegarde JSON locale ====
     public static void SaveGame()
     {
-        if (CurrentProfile == null)
+        if (CurrentProfile == null) return;
+
+        try
         {
-            Console.WriteLine("Aucun profil connecté !");
-            return;
+            string saveDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Save");
+            if (!Directory.Exists(saveDir))
+                Directory.CreateDirectory(saveDir);
+
+            string path = Path.Combine(saveDir, $"Save_{CurrentProfile}.json");
+
+            var inventoryForJson = new Dictionary<string, int>();
+            foreach (var kvp in Inventory)
+                inventoryForJson[kvp.Key.Name] = kvp.Value;
+
+            var saveData = new SaveData
+            {
+                room = room,
+                level = level,
+                PlayerHp = PlayerHp,
+                MonsterHp = MonsterHp,
+                MonsterAttack = MonsterAttack,
+                score = score,
+                Inventory = inventoryForJson
+            };
+
+            string json = JsonSerializer.Serialize(saveData, new JsonSerializerOptions { WriteIndented = true });
+            File.WriteAllText(path, json);
         }
-
-        var saveData = new BsonDocument
+        catch (Exception ex)
         {
-            { "room", room },
-            { "level", level },
-            { "PlayerHp", PlayerHp },
-            { "MonsterHp", MonsterHp },
-            { "MonsterAttack", MonsterAttack },
-            { "score", score },
-            { "bestscore", bestscore },
-            { "Inventory", new BsonDocument(Inventory) }
-        };
-
-        var update = Builders<BsonDocument>.Update.Set("SaveData", saveData);
-        collection.UpdateOne(Builders<BsonDocument>.Filter.Eq("_id", CurrentProfile), update);
-        Console.WriteLine("Partie sauvegardée dans MongoDB !");
+            Console.WriteLine($"Erreur lors de la sauvegarde JSON : {ex.Message}");
+        }
     }
 
-    // ==== Chargement ====
+    // ==== Chargement JSON locale ====
     public static void LoadGame()
     {
-        if (CurrentProfile == null)
-        {
-            Console.WriteLine("Aucun profil connecté !");
-            return;
-        }
+        if (CurrentProfile == null) return;
 
-        var doc = collection.Find(Builders<BsonDocument>.Filter.Eq("_id", CurrentProfile)).FirstOrDefault();
-        if (doc == null || !doc.Contains("SaveData"))
+        string path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Save", $"Save_{CurrentProfile}.json");
+        if (!File.Exists(path))
         {
-            Console.WriteLine("Pas de sauvegarde trouvée. Réinitialisation...");
+            Console.WriteLine("Aucune sauvegarde locale trouvée. Réinitialisation...");
             ResetSave();
             return;
         }
 
-        var data = doc["SaveData"].AsBsonDocument;
-        room = data.GetValue("room", 0).ToInt32();
-        level = data.GetValue("level", 1).ToInt32();
-        PlayerHp = data.GetValue("PlayerHp", 100).ToInt32();
-        MonsterHp = data.GetValue("MonsterHp", 0).ToInt32();
-        MonsterAttack = data.GetValue("MonsterAttack", 0).ToInt32();
-        score = data.GetValue("score", 0).ToInt32();
-        bestscore = data.GetValue("bestscore", 0).ToInt32();
+        string json = File.ReadAllText(path);
+        var data = JsonSerializer.Deserialize<SaveData>(json);
 
-        Inventory = new Dictionary<string, int>();
-        if (data.Contains("Inventory"))
+        room = data.room;
+        level = data.level;
+        PlayerHp = data.PlayerHp;
+        MonsterHp = data.MonsterHp;
+        MonsterAttack = data.MonsterAttack;
+        score = data.score;
+
+        Inventory = new Dictionary<Item, int>();
+        foreach (var kvp in data.Inventory)
         {
-            foreach (var item in data["Inventory"].AsBsonDocument)
-                Inventory[item.Name] = item.Value.AsInt32;
+            Item itemObj = Item.FindByName(kvp.Key);
+            if (itemObj != null)
+                Inventory[itemObj] = kvp.Value;
         }
+    }
 
-        Console.WriteLine("Partie chargée depuis MongoDB !");
+    // ==== Update BestScore MongoDB ====
+    public static void UpdateBestScore()
+    {
+        if (CurrentProfile == null) return;
+        if (score > BestScore)
+        {
+            BestScore = score;
+            var filter = Builders<BsonDocument>.Filter.Eq("_id", CurrentProfile);
+            var update = Builders<BsonDocument>.Update.Set("BestScore", BestScore);
+            collection.UpdateOne(filter, update);
+        }
     }
 
     // ==== Réinitialisation ====
@@ -172,7 +185,6 @@ class Save
         MonsterHp = 0;
         MonsterAttack = 0;
         score = 0;
-        bestscore = 0;
         Inventory = new Dictionary<Item, int>
         {
             { StartSword, 1 },
@@ -180,17 +192,28 @@ class Save
         };
 
         SaveGame();
-        Console.WriteLine("Sauvegarde réinitialisée !");
     }
 
     // ==== Affichage ====
     public static void ShowSaveState()
     {
         Console.WriteLine($"Profil: {CurrentProfile}");
-        Console.WriteLine($"Score: {score}, BestScore: {bestscore}");
-        Console.WriteLine($"HP Joueur: {PlayerHp}, HP Monstre: {MonsterHp}, Attaque Monstre: {MonsterAttack}");
+        Console.WriteLine($"Score: {score}, BestScore: {BestScore}");
+        Console.WriteLine($"Salle: {room}, Level: {level}");
+        Console.WriteLine($"HP Joueur: {PlayerHp}");
         Console.WriteLine("Inventaire:");
         foreach (var item in Inventory)
-            Console.WriteLine($"- {item.Key} x{item.Value}");
+            Console.WriteLine($"- {item.Key.Name} x{item.Value}");
+    }
+
+    private class SaveData
+    {
+        public int room { get; set; }
+        public int level { get; set; }
+        public int PlayerHp { get; set; }
+        public int MonsterHp { get; set; }
+        public int MonsterAttack { get; set; }
+        public int score { get; set; }
+        public Dictionary<string, int> Inventory { get; set; }
     }
 }

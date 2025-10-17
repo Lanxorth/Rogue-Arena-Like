@@ -49,36 +49,7 @@ class Menu
             }
             else
             {
-                Console.WriteLine("\n=== Menu Jeu ===");
-                Console.WriteLine("1 - Start Game");
-                Console.WriteLine("2 - Check Save");
-                Console.WriteLine("3 - Reset Save");
-                Console.WriteLine("4 - Close Game");
-                Console.Write("Votre choix : ");
-                string choix = Console.ReadLine();
-
-                switch (choix)
-                {
-                    case "1":
-                        Game.StartGame();
-                        break;
-
-                    case "2":
-                        Save.ShowSaveState();
-                        break;
-
-                    case "3":
-                        Save.ResetSave();
-                        break;
-
-                    case "4":
-                        Environment.Exit(0);
-                        break;
-
-                    default:
-                        Console.WriteLine("Choix invalide.");
-                        break;
-                }
+                GameMenu();
             }
         }
     }
@@ -104,5 +75,39 @@ class Menu
         } while (info.Key != ConsoleKey.Enter);
         Console.WriteLine();
         return password;
+    }
+
+    public static void GameMenu()
+    {
+        Console.WriteLine("\n=== Menu Jeu ===");
+        Console.WriteLine("1 - Start Game");
+        Console.WriteLine("2 - Check Save");
+        Console.WriteLine("3 - Reset Save");
+        Console.WriteLine("4 - Close Game");
+        Console.Write("Votre choix : ");
+        string choix = Console.ReadLine();
+
+        switch (choix)
+        {
+            case "1":
+                Game.StartGame();
+                return;
+
+            case "2":
+                Save.ShowSaveState();
+                break;
+
+            case "3":
+                Save.ResetSave();
+                break;
+
+            case "4":
+                Environment.Exit(0);
+                break;
+
+            default:
+                Console.WriteLine("Choix invalide.");
+                break;
+        }
     }
 }
