@@ -5,7 +5,7 @@ using System.Text;
 using MongoDB.Bson;
 using MongoDB.Driver;
 
-class GameSaveSystem
+class Save
 {
     // ==== Données de jeu ====
     public static int room = 0;
