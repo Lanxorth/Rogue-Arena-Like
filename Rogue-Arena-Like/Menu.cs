@@ -5,7 +5,7 @@ class Menu
     static void Main(string[] args)
     {
         // Initialisation MongoDB
-        Save.InitializeMongo("mongodb://localhost:27017"); // Remplace par ton URI
+        MongoService.InitializeMongo("mongodb://localhost:27017"); // Remplace par ton URI
 
         bool loggedIn = false;
 
@@ -16,7 +16,8 @@ class Menu
                 Console.WriteLine("\n=== Menu Profil ===");
                 Console.WriteLine("1 - Login");
                 Console.WriteLine("2 - Create Profile");
-                Console.WriteLine("3 - Close Game");
+                Console.WriteLine("3 - Show LeaderBoard");
+                Console.WriteLine("4 - Close Game");
                 Console.Write("Votre choix : ");
                 string choix = Console.ReadLine();
 
@@ -27,7 +28,7 @@ class Menu
                         string loginName = Console.ReadLine();
                         Console.Write("Mot de passe : ");
                         string loginPass = ReadPassword();
-                        loggedIn = Save.Login(loginName, loginPass);
+                        loggedIn = MongoService.Login(loginName, loginPass);
                         break;
 
                     case "2":
@@ -35,10 +36,14 @@ class Menu
                         string newProfile = Console.ReadLine();
                         Console.Write("Mot de passe : ");
                         string newPass = ReadPassword();
-                        Save.CreateProfile(newProfile, newPass);
+                        MongoService.CreateProfile(newProfile, newPass);
                         break;
 
                     case "3":
+                        MongoService.ShowLeaderboard();
+                        break;
+
+                    case "4":
                         Environment.Exit(0);
                         break;
 

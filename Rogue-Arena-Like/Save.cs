@@ -12,92 +12,19 @@ class Save
     public static int room = 0;
     public static int level = 1;
     public static int PlayerHp = 100;
+    public static int PlayerAttack = 10;
     public static int MonsterHp = 0;
     public static int MonsterAttack = 0;
     public static int score = 0;
     public static Dictionary<Item, int> Inventory = new Dictionary<Item, int>();
     static Item StartSword = Item.FindByName("Epée en fer");
     static Item Potion = Item.FindByName("Potion");
+    public static bool inFight = false;
 
-    // ==== Profil ====
-    public static string CurrentProfile = null;
-    public static int BestScore = 0;
-
-    // ==== MongoDB ====
-    private static IMongoCollection<BsonDocument> collection;
-
-    // ==== Initialise MongoDB ====
-    public static void InitializeMongo(string connectionString = "mongodb://localhost:27017")
-    {
-        var client = new MongoClient(connectionString);
-        var db = client.GetDatabase("GameDB");
-        collection = db.GetCollection<BsonDocument>("Profiles");
-    }
-
-    // ==== Création de profil ====
-    public static bool CreateProfile(string profileName, string password)
-    {
-        if (collection.Find(Builders<BsonDocument>.Filter.Eq("_id", profileName)).Any())
-        {
-            Console.WriteLine("Profil déjà existant !");
-            return false;
-        }
-
-        byte[] salt = RandomNumberGenerator.GetBytes(16);
-        byte[] hash = HashPassword(password, salt);
-
-        var doc = new BsonDocument
-        {
-            { "_id", profileName },
-            { "PasswordHash", Convert.ToBase64String(hash) },
-            { "Salt", Convert.ToBase64String(salt) },
-            { "BestScore", 0 }
-        };
-
-        collection.InsertOne(doc);
-        Console.WriteLine($"Profil '{profileName}' créé avec succès !");
-        return true;
-    }
-
-    // ==== Connexion ====
-    public static bool Login(string profileName, string password)
-    {
-        var doc = collection.Find(Builders<BsonDocument>.Filter.Eq("_id", profileName)).FirstOrDefault();
-        if (doc == null)
-        {
-            Console.WriteLine("Profil non trouvé !");
-            return false;
-        }
-
-        byte[] storedHash = Convert.FromBase64String(doc["PasswordHash"].AsString);
-        byte[] salt = Convert.FromBase64String(doc["Salt"].AsString);
-        byte[] hash = HashPassword(password, salt);
-
-        if (!CryptographicOperations.FixedTimeEquals(hash, storedHash))
-        {
-            Console.WriteLine("Mot de passe incorrect !");
-            return false;
-        }
-
-        CurrentProfile = profileName;
-        BestScore = doc["BestScore"].ToInt32();
-
-        LoadGame();
-        Console.WriteLine($"Connecté au profil '{profileName}' !");
-        return true;
-    }
-
-    // ==== Hash du mot de passe ====
-    private static byte[] HashPassword(string password, byte[] salt, int iterations = 100_000, int length = 32)
-    {
-        using var pbkdf2 = new Rfc2898DeriveBytes(password, salt, iterations, HashAlgorithmName.SHA512);
-        return pbkdf2.GetBytes(length);
-    }
-
-    // ==== Sauvegarde JSON locale ====
+    // ==== Sauvegarde JSON ====
     public static void SaveGame()
     {
-        if (CurrentProfile == null) return;
+        if (MongoService.CurrentProfile == null) return;
 
         try
         {
@@ -105,7 +32,7 @@ class Save
             if (!Directory.Exists(saveDir))
                 Directory.CreateDirectory(saveDir);
 
-            string path = Path.Combine(saveDir, $"Save_{CurrentProfile}.json");
+            string path = Path.Combine(saveDir, $"Save_{MongoService.CurrentProfile}.json");
 
             var inventoryForJson = new Dictionary<string, int>();
             foreach (var kvp in Inventory)
@@ -116,94 +43,147 @@ class Save
                 room = room,
                 level = level,
                 PlayerHp = PlayerHp,
+                PlayerAttack = PlayerAttack,
                 MonsterHp = MonsterHp,
                 MonsterAttack = MonsterAttack,
                 score = score,
-                Inventory = inventoryForJson
+                Inventory = inventoryForJson,
+                inFight = inFight
             };
 
             string json = JsonSerializer.Serialize(saveData, new JsonSerializerOptions { WriteIndented = true });
-            File.WriteAllText(path, json);
+            byte[] encrypted = EncryptString(json);
+            File.WriteAllBytes(path, encrypted);
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Erreur lors de la sauvegarde JSON : {ex.Message}");
+            Console.WriteLine("Erreur lors de la sauvegarde du jeu : " + ex.Message);
         }
     }
 
-    // ==== Chargement JSON locale ====
+    // ==== Chargement JSON ====
     public static void LoadGame()
     {
-        if (CurrentProfile == null) return;
+        if (MongoService.CurrentProfile == null) return;
 
-        string path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Save", $"Save_{CurrentProfile}.json");
-        if (!File.Exists(path))
+        try
         {
-            Console.WriteLine("Aucune sauvegarde locale trouvée. Réinitialisation...");
-            ResetSave();
-            return;
+            string path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Save", $"Save_{MongoService.CurrentProfile}.json");
+            if (!File.Exists(path))
+            {
+                Console.WriteLine("Aucune sauvegarde trouvée. Réinitialisation.");
+                ResetSave();
+                return;
+            }
+
+            byte[] encrypted = File.ReadAllBytes(path);
+            string json = DecryptBytes(encrypted);
+            var data = JsonSerializer.Deserialize<SaveData>(json);
+
+            room = data.room;
+            level = data.level;
+            PlayerHp = data.PlayerHp;
+            PlayerAttack = data.PlayerAttack;
+            MonsterHp = data.MonsterHp;
+            MonsterAttack = data.MonsterAttack;
+            score = data.score;
+            inFight = data.inFight;
+
+            Inventory = new Dictionary<Item, int>();
+            foreach (var kvp in data.Inventory)
+            {
+                Item itemObj = Item.FindByName(kvp.Key);
+                if (itemObj != null)
+                    Inventory[itemObj] = kvp.Value;
+            }
         }
-
-        string json = File.ReadAllText(path);
-        var data = JsonSerializer.Deserialize<SaveData>(json);
-
-        room = data.room;
-        level = data.level;
-        PlayerHp = data.PlayerHp;
-        MonsterHp = data.MonsterHp;
-        MonsterAttack = data.MonsterAttack;
-        score = data.score;
-
-        Inventory = new Dictionary<Item, int>();
-        foreach (var kvp in data.Inventory)
+        catch (Exception ex)
         {
-            Item itemObj = Item.FindByName(kvp.Key);
-            if (itemObj != null)
-                Inventory[itemObj] = kvp.Value;
-        }
-    }
-
-    // ==== Update BestScore MongoDB ====
-    public static void UpdateBestScore()
-    {
-        if (CurrentProfile == null) return;
-        if (score > BestScore)
-        {
-            BestScore = score;
-            var filter = Builders<BsonDocument>.Filter.Eq("_id", CurrentProfile);
-            var update = Builders<BsonDocument>.Update.Set("BestScore", BestScore);
-            collection.UpdateOne(filter, update);
+            Console.WriteLine("Erreur lors du chargement de la sauvegarde : " + ex.Message);
         }
     }
 
     // ==== Réinitialisation ====
     public static void ResetSave()
     {
-        room = 0;
-        level = 1;
-        PlayerHp = 100;
-        MonsterHp = 0;
-        MonsterAttack = 0;
-        score = 0;
-        Inventory = new Dictionary<Item, int>
+        try
         {
-            { StartSword, 1 },
-            { Potion, 3 }
-        };
+            room = 0;
+            level = 1;
+            PlayerHp = 100;
+            PlayerAttack = 10;
+            MonsterHp = 0;
+            MonsterAttack = 0;
+            score = 0;
+            Inventory = new Dictionary<Item, int>
+            {
+                { StartSword, 1 },
+                { Potion, 3 }
+            };
+            inFight = false;
 
-        SaveGame();
+            SaveGame();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine("Erreur lors de la réinitialisation : " + ex.Message);
+        }
     }
 
     // ==== Affichage ====
     public static void ShowSaveState()
     {
-        Console.WriteLine($"Profil: {CurrentProfile}");
-        Console.WriteLine($"Score: {score}, BestScore: {BestScore}");
-        Console.WriteLine($"Salle: {room}, Level: {level}");
-        Console.WriteLine($"HP Joueur: {PlayerHp}");
-        Console.WriteLine("Inventaire:");
-        foreach (var item in Inventory)
-            Console.WriteLine($"- {item.Key.Name} x{item.Value}");
+        try
+        {
+            Console.WriteLine("Profil: " + MongoService.CurrentProfile);
+            Console.WriteLine("Score: " + score + ", Meilleur score: " + MongoService.BestScore);
+            Console.WriteLine("Salle: " + room + ", Niveau: " + level);
+            Console.WriteLine("PV Joueur: " + PlayerHp + ", Attaque Joueur: " + PlayerAttack);
+            Console.WriteLine("Inventaire:");
+            foreach (var item in Inventory)
+                Console.WriteLine("- " + item.Key.Name + " x" + item.Value);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine("Erreur lors de l'affichage de la sauvegarde : " + ex.Message);
+        }
+    }
+
+    private static byte[] encryptionKey = new byte[32]  // 256 bits AES
+{
+    21, 32, 12, 44, 55, 66, 77, 88, 99, 100, 101, 102, 103, 104, 105, 106,
+    107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122
+};
+
+    private static byte[] EncryptString(string plainText)
+    {
+        using Aes aes = Aes.Create();
+        aes.Key = encryptionKey;
+        aes.GenerateIV(); // génère un vecteur d'initialisation (IV) aléatoire
+
+        using MemoryStream ms = new();
+        ms.Write(aes.IV, 0, aes.IV.Length); // stocke l'IV au début du fichier
+
+        using CryptoStream cryptoStream = new(ms, aes.CreateEncryptor(), CryptoStreamMode.Write);
+        using StreamWriter sw = new(cryptoStream);
+        sw.Write(plainText);
+
+        return ms.ToArray();
+    }
+
+    private static string DecryptBytes(byte[] cipherData)
+    {
+        using Aes aes = Aes.Create();
+        aes.Key = encryptionKey;
+
+        byte[] iv = new byte[16]; // taille d'un IV pour AES
+        Array.Copy(cipherData, 0, iv, 0, iv.Length);
+        aes.IV = iv;
+
+        using MemoryStream ms = new(cipherData, iv.Length, cipherData.Length - iv.Length);
+        using CryptoStream cryptoStream = new(ms, aes.CreateDecryptor(), CryptoStreamMode.Read);
+        using StreamReader sr = new(cryptoStream);
+        return sr.ReadToEnd();
     }
 
     private class SaveData
@@ -211,9 +191,11 @@ class Save
         public int room { get; set; }
         public int level { get; set; }
         public int PlayerHp { get; set; }
+        public int PlayerAttack { get; set; }
         public int MonsterHp { get; set; }
         public int MonsterAttack { get; set; }
         public int score { get; set; }
         public Dictionary<string, int> Inventory { get; set; }
+        public bool inFight { get; set; }
     }
 }

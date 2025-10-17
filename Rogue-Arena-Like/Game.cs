@@ -9,6 +9,13 @@ class Game
 
         while (inGame)
         {
+            Random rnd = new Random();
+
+            if (Save.inFight == true)
+            {
+                Fight(rnd);
+            }
+
             Console.WriteLine("\n=== Menu Jeu ===");
             Console.WriteLine("1 - Go to next room");
             Console.WriteLine("2 - Check Inventory");
@@ -16,33 +23,39 @@ class Game
             Console.Write("Votre choix : ");
             string choix = Console.ReadLine();
 
+
             switch (choix)
             {
                 case "1":
                     Save.room++;
-                    Random rnd = new Random();
                     int randEvent = rnd.Next(1, 4);
+                    Console.WriteLine("\nVous entrez dans la salle " + Save.room+".");
                     switch (randEvent)
                     {
                         case 1:
 
-                            Console.WriteLine("Potion trouver.");
+                            int randomPotion = rnd.Next(1, 4);
+                            Console.WriteLine("\n"+randomPotion+" Potion trouver!");
                             if (Save.Inventory.ContainsKey(potionObj))
-                                Save.Inventory[potionObj] += 1;
+                                Save.Inventory[potionObj] += randomPotion;
                             else
-                                Save.Inventory[potionObj] = 1;
+                                Save.Inventory[potionObj] = randomPotion;
                             break;
                         case 2:
+                            Save.inFight = true;
+                            Save.SaveGame();
                             Fight(rnd);
-                            return;
+                            break;
 
                         case 3:
+                            Save.inFight = true;
+                            Save.SaveGame();
                             Fight(rnd);
-                            return;
+                            break;
 
                     }
                     Save.score += 10;
-                    Save.UpdateBestScore();
+                    MongoService.UpdateBestScore(Save.score);
                     Save.SaveGame();
                     break;
 
@@ -64,11 +77,11 @@ class Game
 
     public static void Fight(Random random)
     {
-        // Si le monstre n'existe pas encore (nouveau combat)
+        // Si le monstre n'existe pas encore
         if (Save.MonsterHp <= 0)
         {
             Save.MonsterHp = random.Next(50, 101); // PV monstre entre 50 et 100
-            Save.MonsterAttack = random.Next(5, 16); // Dégâts entre 5 et 15
+            Save.MonsterAttack = random.Next(0, 11) + Save.room; // Dégâts entre 0 et 10
             Console.WriteLine($"Un monstre apparaît avec {Save.MonsterHp} HP !");
         }
         else
@@ -79,9 +92,8 @@ class Game
         while (Save.MonsterHp > 0 && Save.PlayerHp > 0)
         {
             Console.WriteLine("\nQue voulez-vous faire ?");
-            Console.WriteLine("1. Attaquer (inflige 10 dégâts)");
+            Console.WriteLine("1. Attaquer (inflige "+Save.PlayerAttack+" dégâts)");
             Console.WriteLine("2. Utiliser une potion (+50 HP, max 100)");
-            Console.WriteLine("3. Fuir le combat");
 
             string choice = Console.ReadLine();
 
@@ -111,10 +123,9 @@ class Game
                     }
                     break;
 
-                case "3":
-                    Console.WriteLine("Vous fuyez le combat !");
-                    Save.SaveGame();
-                    return; // Le joueur quitte le combat
+                default:
+                    Console.WriteLine("Choix invalide.");
+                    break;
             }
 
             // Si le monstre est encore vivant, il attaque
@@ -133,14 +144,18 @@ class Game
             if (Save.PlayerHp <= 0)
             {
                 Console.WriteLine("Vous êtes mort...");
+                MongoService.UpdateBestScore(Save.score);
                 Save.ResetSave(); // Reset la partie
                 return;
             }
             else if (Save.MonsterHp <= 0)
             {
                 Console.WriteLine("Vous avez vaincu le monstre !");
-                Save.score += 10;
-                Save.UpdateBestScore();
+                Save.score += 50;
+                Save.level ++;
+                Save.PlayerAttack += 5;
+                MongoService.UpdateBestScore(Save.score);
+                Save.inFight = false;
 
                 // Réinitialise le combat
                 Save.MonsterHp = 0;
